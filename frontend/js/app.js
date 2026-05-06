@@ -5,53 +5,130 @@ import * as ui from './ui.js';
 let selectedFiles = [];
 let currentTaskId = null;
 let pollInterval = null;
-let modelVariant = 'v2_ctc';
+let _hubPollers = {};
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+function setNavTab(which) {
+  document.getElementById('nav-hub').classList.toggle('active', which === 'hub');
+  document.getElementById('nav-main').classList.toggle('active', which === 'main');
+}
+
+function setMainTabEnabled(enabled) {
+  document.getElementById('nav-main').disabled = !enabled;
+}
+
+document.getElementById('nav-hub').addEventListener('click', () => {
+  refreshHub().then(() => { ui.showScreen('stage1'); setNavTab('hub'); });
+});
+
+document.getElementById('nav-main').addEventListener('click', () => {
+  if (!document.getElementById('nav-main').disabled) {
+    ui.showScreen('stage2'); setNavTab('main');
+  }
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   setupStage2();
+  await refreshHub(true);
+}
+
+// ── Hub ───────────────────────────────────────────────────────────────────────
+async function refreshHub(navigate = false) {
   try {
-    const status = await api.modelStatus();
-    modelVariant = status.variant || 'e2e_ctc';
-    document.getElementById('model-badge').textContent = `v3 ${modelVariant}`;
-    if (status.loaded) {
-      ui.setModelLoaded(true);
-      ui.showScreen('stage2');
-    } else {
-      ui.showScreen('stage1');
+    const info = await api.systemInfo();
+    ui.renderHub(info.components, {
+      onInstall: handleInstall,
+      onUninstall: handleUninstall,
+      onSetActive: handleSetActive,
+    });
+    ui.applySystemInfo(info);
+
+    const anyModel = info.components.some(c => c.type === 'model' && c.installed);
+    setMainTabEnabled(anyModel);
+
+    if (navigate) {
+      if (anyModel) {
+        ui.showScreen('stage2'); setNavTab('main');
+      } else {
+        ui.showScreen('stage1'); setNavTab('hub');
+      }
     }
-  } catch (e) {
-    ui.showScreen('stage1');
+
+    for (const comp of info.components) {
+      if (comp.installing && !_hubPollers[comp.id]) {
+        startHubPoll(comp.id);
+      }
+    }
+  } catch {
+    ui.showScreen('stage1'); setNavTab('hub');
   }
 }
 
-// ── Stage 1: model install ────────────────────────────────────────────────────
-document.getElementById('install-btn').addEventListener('click', async () => {
-  ui.showDownloadBlock();
+async function handleInstall(id) {
   try {
-    await api.modelDownload();
-    pollDownload();
+    if (id === 'punctuation') {
+      await api.installPunct();
+    } else {
+      await api.installModel(id);
+    }
+    await refreshHub();
+    startHubPoll(id);
   } catch (e) {
-    ui.toast('Ошибка запуска загрузки: ' + e.message, 'error');
+    ui.toast('Ошибка установки: ' + e.message, 'error');
   }
-});
+}
 
-function pollDownload() {
-  const iv = setInterval(async () => {
+async function handleUninstall(id) {
+  try {
+    stopHubPoll(id);
+    if (id === 'punctuation') {
+      await api.uninstallPunct();
+    } else {
+      await api.uninstallModel(id);
+    }
+    await refreshHub();
+  } catch (e) {
+    ui.toast('Ошибка удаления: ' + e.message, 'error');
+  }
+}
+
+async function handleSetActive(variant) {
+  try {
+    await api.setActiveModel(variant);
+    await refreshHub();
+  } catch (e) {
+    ui.toast('Ошибка: ' + e.message, 'error');
+  }
+}
+
+function startHubPoll(id) {
+  if (_hubPollers[id]) return;
+  _hubPollers[id] = setInterval(async () => {
     try {
-      const prog = await api.modelDownloadProgress();
-      ui.setDownloadProgress(prog.percent, prog.current_mb || 0, prog.total_mb || 900);
-      if (prog.done) {
-        clearInterval(iv);
-        ui.setDownloadDone();
-        ui.setModelLoaded(true);
-        setTimeout(() => ui.showScreen('stage2'), 1500);
-      } else if (prog.error) {
-        clearInterval(iv);
-        ui.toast('Ошибка загрузки модели: ' + prog.error, 'error');
+      const info = await api.systemInfo();
+      ui.renderHub(info.components, {
+        onInstall: handleInstall,
+        onUninstall: handleUninstall,
+        onSetActive: handleSetActive,
+      });
+      const anyModel = info.components.some(c => c.type === 'model' && c.installed);
+      setMainTabEnabled(anyModel);
+
+      const comp = info.components.find(c => c.id === id);
+      if (!comp || !comp.installing) {
+        stopHubPoll(id);
+        ui.applySystemInfo(info);
       }
     } catch {}
   }, 2000);
+}
+
+function stopHubPoll(id) {
+  if (_hubPollers[id]) {
+    clearInterval(_hubPollers[id]);
+    delete _hubPollers[id];
+  }
 }
 
 // ── Stage 2: file upload & settings ──────────────────────────────────────────
@@ -69,7 +146,6 @@ function setupStage2() {
   });
   fileInput.addEventListener('change', () => addFiles(Array.from(fileInput.files)));
 
-  // Segmented control
   document.querySelectorAll('.seg-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
@@ -77,15 +153,12 @@ function setupStage2() {
     });
   });
 
-  // Chunk slider
   const slider = document.getElementById('chunk-slider');
   const sliderVal = document.getElementById('chunk-value');
   slider.addEventListener('input', () => { sliderVal.textContent = slider.value + ' с'; });
 
-  // Transcribe button
   document.getElementById('transcribe-btn').addEventListener('click', startTranscription);
 
-  // Cancel button
   document.getElementById('cancel-btn').addEventListener('click', async () => {
     if (currentTaskId) {
       try { await api.cancelTask(currentTaskId); } catch {}
@@ -96,7 +169,6 @@ function setupStage2() {
     }
   });
 
-  // "Process more" button
   document.getElementById('more-btn').addEventListener('click', () => {
     selectedFiles = [];
     currentTaskId = null;
@@ -104,6 +176,7 @@ function setupStage2() {
     ui.setTranscribeButtonState(false);
     ui.showProgressBlock(false);
     ui.showScreen('stage2');
+    setNavTab('main');
   });
 }
 
@@ -132,9 +205,7 @@ function removeFile(idx) {
 async function startTranscription() {
   if (!selectedFiles.length) return;
   const settings = ui.getSettings();
-
   ui.showProgressBlock(true);
-
   try {
     const { task_id } = await api.transcribe(selectedFiles, settings);
     currentTaskId = task_id;
@@ -156,11 +227,10 @@ function pollTask(taskId, fmt) {
     try {
       const status = await api.taskStatus(taskId);
       ui.updateProgress(status);
-
       if (status.state === 'done') {
         stopPoll();
         ui.showProgressBlock(false);
-        showResults(taskId, fmt, status);
+        showResults(taskId, fmt);
       } else if (status.state === 'cancelled' || status.state === 'error') {
         stopPoll();
         ui.showProgressBlock(false);
@@ -171,11 +241,12 @@ function pollTask(taskId, fmt) {
   }, 1500);
 }
 
-async function showResults(taskId, fmt, statusData) {
+async function showResults(taskId, fmt) {
   try {
     const fullStatus = await api.taskStatus(taskId);
     ui.renderResults(fullStatus, taskId, fmt, ui.openModal);
     ui.showScreen('stage3');
+    setNavTab('main');
   } catch (e) {
     ui.toast('Не удалось загрузить результаты: ' + e.message, 'error');
   }

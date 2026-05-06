@@ -11,7 +11,6 @@ from pydub import AudioSegment
 logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
-# gigaam transcribe() rejects files > 25 s; keep hard cap at 15 s for safety
 HARD_CAP_SEC = 15
 
 VIDEO_EXTS = {'.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.m2ts'}
@@ -22,7 +21,6 @@ def _is_video(path: str) -> bool:
 
 
 def _has_audio_stream(input_abs: str, ffmpeg_bin: str) -> bool:
-    """Use ffprobe (or fallback: ffmpeg stderr) to detect if file has an audio stream."""
     ffprobe_bin = shutil.which('ffprobe') or ffmpeg_bin.replace('ffmpeg', 'ffprobe')
     probe = subprocess.run(
         [ffprobe_bin, '-v', 'error',
@@ -34,8 +32,6 @@ def _has_audio_stream(input_abs: str, ffmpeg_bin: str) -> bool:
     )
     if probe.returncode == 0 and b'audio' in probe.stdout:
         return True
-
-    # ffprobe not available — fall back to reading ffmpeg stderr for stream info
     info = subprocess.run(
         [ffmpeg_bin, '-v', 'quiet', '-i', input_abs],
         capture_output=True,
@@ -43,40 +39,40 @@ def _has_audio_stream(input_abs: str, ffmpeg_bin: str) -> bool:
     return b'Audio:' in info.stderr
 
 
-def convert_to_wav(input_path: str, output_path: str) -> str:
-    # Use absolute paths — relative paths can break on Windows when the
-    # subprocess working directory differs from the server cwd.
-    input_abs = os.path.abspath(input_path)
-    output_abs = os.path.abspath(output_path)
-
+def _load_pcm(path: str) -> AudioSegment:
+    """Decode any audio/video file to 16 kHz mono PCM in memory — no temp file."""
+    abs_path = os.path.abspath(path)
     ffmpeg_bin = shutil.which('ffmpeg') or 'ffmpeg'
 
-    if not _has_audio_stream(input_abs, ffmpeg_bin):
-        raise RuntimeError(
-            'В файле не найдена аудиодорожка. '
-            'Возможно, файл содержит только видео без звука.'
-        )
+    if _is_video(abs_path):
+        if not _has_audio_stream(abs_path, ffmpeg_bin):
+            raise RuntimeError(
+                'В файле не найдена аудиодорожка. '
+                'Возможно, файл содержит только видео без звука.'
+            )
 
     cmd = [
         ffmpeg_bin, '-y',
-        '-i', input_abs,
-        '-map', '0:a:0',   # explicitly pick first audio stream
+        '-i', abs_path,
+        '-map', '0:a:0',
         '-vn',
+        '-f', 's16le',
         '-acodec', 'pcm_s16le',
         '-ar', str(SAMPLE_RATE),
         '-ac', '1',
-        output_abs,
+        '-',
     ]
     result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0:
         err = result.stderr.decode('utf-8', errors='replace')
-        raise RuntimeError(f'ffmpeg conversion failed: {err[-400:]}')
-    return output_abs
+        raise RuntimeError(f'ffmpeg decode failed: {err[-400:]}')
 
-
-def get_duration(wav_path: str) -> float:
-    audio = AudioSegment.from_wav(wav_path)
-    return len(audio) / 1000.0
+    return AudioSegment(
+        data=result.stdout,
+        sample_width=2,
+        frame_rate=SAMPLE_RATE,
+        channels=1,
+    )
 
 
 def _pydub_to_tensor(audio: AudioSegment) -> torch.Tensor:
@@ -94,9 +90,8 @@ def _sub_split(
     start_ms: int,
     end_ms: int,
     tmp_dir: str,
-    idx_ref: list,  # mutable counter [n]
+    idx_ref: list,
 ) -> List[Tuple[str, float, float]]:
-    """Split a segment into HARD_CAP_SEC sub-chunks if it's too long."""
     cap_ms = HARD_CAP_SEC * 1000
     result = []
     offset = start_ms
@@ -110,12 +105,10 @@ def _sub_split(
     return result
 
 
-def split_fixed(wav_path: str, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, float, float]]:
-    cap_sec = min(chunk_sec, HARD_CAP_SEC)
-    audio = AudioSegment.from_wav(wav_path)
-    cap_ms = cap_sec * 1000
+def _split_fixed_seg(audio: AudioSegment, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, float, float]]:
+    cap_ms = min(chunk_sec, HARD_CAP_SEC) * 1000
     total_ms = len(audio)
-    chunks = []
+    chunks: List[Tuple[str, float, float]] = []
     idx = [0]
     offset = 0
     while offset < total_ms:
@@ -128,35 +121,23 @@ def split_fixed(wav_path: str, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, 
     return chunks
 
 
-def split_vad(wav_path: str, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, float, float]]:
-    cap_sec = min(chunk_sec, HARD_CAP_SEC)
+def _split_vad_seg(audio: AudioSegment, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, float, float]]:
+    cap_ms = min(chunk_sec, HARD_CAP_SEC) * 1000
     try:
         from silero_vad import load_silero_vad, get_speech_timestamps
 
-        audio = AudioSegment.from_wav(wav_path)
         wav_tensor = _pydub_to_tensor(audio)
-
         vad_model = load_silero_vad()
         timestamps = get_speech_timestamps(wav_tensor, vad_model, sampling_rate=SAMPLE_RATE)
 
         if not timestamps:
-            return split_fixed(wav_path, cap_sec, tmp_dir)
+            return _split_fixed_seg(audio, chunk_sec, tmp_dir)
 
-        cap_ms = cap_sec * 1000
         idx = [0]
         chunks: List[Tuple[str, float, float]] = []
-
-        # Group consecutive speech segments into chunks ≤ cap_ms,
-        # then sub-split any chunk that still exceeds HARD_CAP_SEC.
         pending_start_ms: int | None = None
         pending_end_ms: int = 0
         pending_dur_ms: int = 0
-
-        def flush_pending():
-            if pending_start_ms is None:
-                return
-            for item in _sub_split(audio, pending_start_ms, pending_end_ms, tmp_dir, idx):
-                chunks.append(item)
 
         for ts in timestamps:
             seg_start_ms = int(ts["start"] * 1000 / SAMPLE_RATE)
@@ -168,7 +149,6 @@ def split_vad(wav_path: str, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, fl
                 pending_end_ms = seg_end_ms
                 pending_dur_ms = seg_dur_ms
             elif pending_dur_ms + seg_dur_ms > cap_ms:
-                # flush what we have, start new group
                 for item in _sub_split(audio, pending_start_ms, pending_end_ms, tmp_dir, idx):
                     chunks.append(item)
                 pending_start_ms = seg_start_ms
@@ -178,13 +158,31 @@ def split_vad(wav_path: str, chunk_sec: int, tmp_dir: str) -> List[Tuple[str, fl
                 pending_end_ms = seg_end_ms
                 pending_dur_ms += seg_dur_ms
 
-        # flush last group
         if pending_start_ms is not None:
             for item in _sub_split(audio, pending_start_ms, pending_end_ms, tmp_dir, idx):
                 chunks.append(item)
 
-        return chunks if chunks else split_fixed(wav_path, cap_sec, tmp_dir)
+        return chunks if chunks else _split_fixed_seg(audio, chunk_sec, tmp_dir)
 
     except Exception as e:
         logger.warning("VAD failed (%s), falling back to fixed split", e)
-        return split_fixed(wav_path, cap_sec, tmp_dir)
+        return _split_fixed_seg(audio, chunk_sec, tmp_dir)
+
+
+def load_split(
+    path: str,
+    chunk_sec: int,
+    tmp_dir: str,
+    use_vad: bool,
+) -> Tuple[float, List[Tuple[str, float, float]]]:
+    """
+    Decode audio/video in one ffmpeg pass, return (duration_sec, chunks).
+    No intermediate file written — PCM lives in RAM only during this call.
+    """
+    audio = _load_pcm(path)
+    duration = len(audio) / 1000.0
+    if use_vad:
+        chunks = _split_vad_seg(audio, chunk_sec, tmp_dir)
+    else:
+        chunks = _split_fixed_seg(audio, chunk_sec, tmp_dir)
+    return duration, chunks

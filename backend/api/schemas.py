@@ -2,17 +2,34 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
-class ModelStatusResponse(BaseModel):
-    loaded: bool
-    variant: str
+class ComponentInfo(BaseModel):
+    id: str
+    type: str           # "model" | "addon"
+    name: str
+    description: str
+    size_mb: int
+    installed: bool
+    active: bool = False
+    installing: bool = False
+    install_percent: float = 0.0
+    install_elapsed: int = 0
+    install_error: Optional[str] = None
+
+
+class SystemInfoResponse(BaseModel):
+    cuda_available: bool
+    device_name: Optional[str] = None
+    components: List[ComponentInfo]
 
 
 class DownloadProgressResponse(BaseModel):
     percent: float
     done: bool
+    running: bool = False
     error: Optional[str] = None
     current_mb: int = 0
-    total_mb: int = 900
+    total_mb: int = 448
+    variant: str = "v2_ctc"
 
 
 class TranscribeResponse(BaseModel):

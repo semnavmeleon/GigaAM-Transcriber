@@ -41,33 +41,90 @@ export function showScreen(id) {
   if (el) { el.style.display = ''; el.classList.add('active'); }
 }
 
-// ── Stage 1 ───────────────────────────────────────────────────────────────────
-export function setDownloadProgress(percent, currentMb, totalMb) {
-  const fill = document.getElementById('dl-fill');
-  const info = document.getElementById('dl-info-right');
-  const status = document.getElementById('dl-status');
-  if (fill) fill.style.width = percent + '%';
-  if (info) info.textContent = `${currentMb} МБ / ${totalMb} МБ`;
-  if (status) status.textContent = 'Загрузка весов модели...';
+// ── Stage 1: Hub ─────────────────────────────────────────────────────────────
+export function renderHub(components, handlers) {
+  const grid = document.getElementById('hub-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const comp of components) {
+    grid.appendChild(buildHubCard(comp, handlers));
+  }
 }
 
-export function setDownloadDone() {
-  const fill = document.getElementById('dl-fill');
-  const status = document.getElementById('dl-status');
-  const info = document.getElementById('dl-info-right');
-  if (fill) { fill.style.width = '100%'; fill.classList.add('done'); }
-  if (status) status.innerHTML = `<span style="color:var(--ok)">${I.check} Модель установлена</span>`;
-  if (info) info.textContent = '';
-}
+function buildHubCard(comp, { onInstall, onUninstall, onSetActive }) {
+  const card = document.createElement('div');
+  card.className = 'hub-card' + (comp.installing ? ' installing' : '');
+  card.dataset.id = comp.id;
 
-export function showDownloadBlock() {
-  document.getElementById('install-btn').classList.add('hidden');
-  document.getElementById('download-block').style.display = 'block';
-}
+  // Body
+  const body = document.createElement('div');
+  body.className = 'hub-card-body';
+  body.innerHTML = `
+    <div class="hub-card-title">
+      ${comp.name}
+      <span class="hub-size">${comp.size_mb} МБ</span>
+    </div>
+    <div class="hub-card-desc">${comp.description}</div>
+    ${comp.install_error ? `<div class="hub-card-error">${comp.install_error}</div>` : ''}`;
 
-export function setModelLoaded(loaded) {
-  const dot = document.getElementById('status-dot');
-  if (dot) dot.classList.toggle('active', loaded);
+  if (comp.installing) {
+    const pct = comp.install_percent || 0;
+    const indeterminate = pct < 1;
+    const downloaded = Math.round(pct / 100 * comp.size_mb);
+    const elapsed = comp.install_elapsed || 0;
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+    const timeStr = elapsed > 0 ? ` · ${mm}:${ss}` : '';
+    const progEl = document.createElement('div');
+    progEl.className = 'hub-card-prog';
+    progEl.innerHTML = `
+      <div class="hub-prog-bar">
+        <div class="hub-prog-fill${indeterminate ? ' indeterminate' : ''}"
+             style="width:${pct}%"></div>
+      </div>
+      <div class="hub-prog-label">${pct >= 1
+        ? `${downloaded} МБ / ${comp.size_mb} МБ  ·  ${Math.round(pct)}%${timeStr}`
+        : `Загрузка ~${comp.size_mb} МБ${timeStr}`}</div>`;
+    body.appendChild(progEl);
+  }
+  card.appendChild(body);
+
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'hub-card-actions';
+
+  if (comp.installing) {
+    // no actions while installing
+  } else if (!comp.installed) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary btn-sm';
+    btn.textContent = 'Установить';
+    btn.addEventListener('click', () => onInstall(comp.id));
+    actions.appendChild(btn);
+  } else {
+    if (comp.type === 'model') {
+      if (comp.active) {
+        const badge = document.createElement('span');
+        badge.className = 'hub-active-badge';
+        badge.textContent = 'Активна';
+        actions.appendChild(badge);
+      } else {
+        const useBtn = document.createElement('button');
+        useBtn.className = 'btn btn-ghost btn-sm';
+        useBtn.textContent = 'Использовать';
+        useBtn.addEventListener('click', () => onSetActive(comp.id));
+        actions.appendChild(useBtn);
+      }
+    }
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-hub-del';
+    delBtn.textContent = 'Удалить';
+    delBtn.addEventListener('click', () => onUninstall(comp.id));
+    actions.appendChild(delBtn);
+  }
+
+  card.appendChild(actions);
+  return card;
 }
 
 // ── File list ─────────────────────────────────────────────────────────────────
@@ -112,8 +169,30 @@ export function getSettings() {
   const fmt = document.querySelector('.seg-btn.active')?.dataset.fmt || 'txt';
   const chunkSize = parseInt(document.getElementById('chunk-slider').value, 10);
   const useVad = document.getElementById('vad-toggle').checked;
+  const usePunctuation = document.getElementById('punct-toggle')?.checked ?? false;
   const deviceEl = document.querySelector('input[name="device"]:checked');
-  return { fmt, chunkSize, useVad, device: deviceEl ? deviceEl.value : 'cpu' };
+  return {
+    fmt,
+    chunkSize,
+    useVad,
+    usePunctuation,
+    device: deviceEl ? deviceEl.value : 'cpu',
+  };
+}
+
+export function applySystemInfo(info) {
+  if (info.cuda_available) {
+    const deviceGroup = document.getElementById('device-group');
+    if (deviceGroup) deviceGroup.classList.remove('hidden');
+    const badge = document.getElementById('cuda-badge');
+    if (badge && info.device_name) badge.title = info.device_name;
+  }
+  // Show punctuation toggle only if addon is installed
+  const punctGroup = document.getElementById('punct-group');
+  if (punctGroup) {
+    const punct = info.components?.find(c => c.id === 'punctuation');
+    punctGroup.style.display = punct?.installed ? '' : 'none';
+  }
 }
 
 export function setTranscribeButtonState(enabled) {

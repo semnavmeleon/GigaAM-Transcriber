@@ -49,17 +49,20 @@ header {
 
 .header-right { display: flex; align-items: center; gap: 12px; }
 
-.model-badge {
-  font-size: 11px; color: var(--text-2);
-  background: var(--input); border: 1px solid var(--border);
-  padding: 3px 8px; border-radius: var(--radius);
+.header-nav {
+  display: flex; background: var(--input);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 2px; gap: 2px;
 }
-
-.status-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--text-3); transition: background var(--t);
+.nav-tab {
+  padding: 4px 14px; border-radius: 4px;
+  font-size: 13px; cursor: pointer; border: none;
+  background: none; color: var(--text-3);
+  transition: background var(--t), color var(--t);
+  font-family: inherit; white-space: nowrap;
 }
-.status-dot.active { background: var(--ok); }
+.nav-tab.active { background: var(--border); color: var(--text); }
+.nav-tab:disabled { cursor: not-allowed; opacity: 0.4; }
 
 main {
   flex: 1; margin-top: 52px;
@@ -82,28 +85,70 @@ footer {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Stage 1 ─────────────────────────────────────────── */
-#stage1 { text-align: center; padding-top: 15vh; }
+/* ── Stage 1: Hub ────────────────────────────────────── */
+#stage1 { padding-top: 40px; }
 
-.install-icon {
-  width: 96px; height: 96px; border-radius: 16px;
-  background: #1A1830; display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 24px;
+.hub-header { margin-bottom: 28px; }
+.hub-header h1 { font-size: 22px; font-weight: 500; }
+.hub-header .subtitle { font-size: 14px; color: var(--text-2); margin-top: 4px; }
+
+.hub-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.hub-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px 20px;
+  display: flex; align-items: center; gap: 16px;
+  transition: border-color var(--t);
 }
-.install-icon svg { color: var(--accent); width: 48px; height: 48px; }
+.hub-card:hover { border-color: #3A3A3A; }
+.hub-card.installing { border-color: var(--accent); }
 
-#stage1 h1 { font-size: 24px; font-weight: 500; }
-#stage1 .subtitle {
-  font-size: 14px; color: var(--text-2); max-width: 420px;
-  margin: 8px auto 0; line-height: 1.6;
+.hub-card-body { flex: 1; min-width: 0; }
+.hub-card-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 500;
 }
-
-.pills { display: flex; gap: 8px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
-.pill {
+.hub-size {
+  font-size: 11px; color: var(--text-3);
   background: var(--input); border: 1px solid var(--border);
-  padding: 6px 12px; border-radius: var(--radius);
-  font-size: 13px; color: var(--text-2);
+  padding: 2px 7px; border-radius: var(--radius-sm);
 }
+.hub-card-desc { font-size: 13px; color: var(--text-2); margin-top: 3px; }
+
+.hub-card-prog { margin-top: 10px; }
+.hub-prog-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.hub-prog-fill {
+  height: 100%; border-radius: 2px; background: var(--accent);
+  transition: width 500ms ease;
+}
+.hub-prog-fill.indeterminate {
+  width: 40% !important;
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+.hub-prog-label { font-size: 12px; color: var(--text-3); margin-top: 5px; }
+
+.hub-card-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.hub-active-badge {
+  font-size: 12px; color: var(--ok);
+  border: 1px solid var(--ok); padding: 5px 9px;
+  border-radius: var(--radius-sm); white-space: nowrap;
+}
+.btn-sm { padding: 6px 14px; font-size: 13px; min-width: 110px; justify-content: center; }
+.btn-hub-del {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 110px; padding: 6px 14px; border-radius: var(--radius);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-3); font-family: inherit;
+  transition: border-color var(--t), color var(--t);
+}
+.btn-hub-del:hover { border-color: var(--err); color: var(--err); }
+
+.hub-card-error { font-size: 12px; color: var(--err); margin-top: 6px; }
 
 /* ── Buttons ─────────────────────────────────────────── */
 .btn {
@@ -289,7 +334,7 @@ input[type=range]::-moz-range-thumb {
 .device-row { display: flex; gap: 12px; }
 .device-opt { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
 .device-opt input { accent-color: var(--accent); cursor: pointer; }
-.cuda-badge {
+.cuda-badge, .cached-badge {
   font-size: 11px; color: var(--ok);
   border: 1px solid var(--ok); padding: 2px 6px;
   border-radius: var(--radius-sm); margin-left: 4px;

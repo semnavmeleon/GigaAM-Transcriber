@@ -25,57 +25,24 @@
       GigaAM
     </div>
     <div class="header-right">
-      <span class="model-badge" id="model-badge">v2 v2_ctc</span>
-      <span class="status-dot" id="status-dot" title="Статус модели"></span>
+      <div class="header-nav">
+        <button class="nav-tab active" id="nav-hub">Компоненты</button>
+        <button class="nav-tab" id="nav-main" disabled>Транскрибация</button>
+      </div>
     </div>
   </header>
 
   <!-- ── Main ───────────────────────────────────────────── -->
   <main>
 
-    <!-- ══ STAGE 1: Install ══════════════════════════════ -->
+    <!-- ══ STAGE 1: Component Hub ════════════════════════ -->
     <section id="stage1" class="screen">
-      <div class="install-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24"
-             fill="none" stroke="currentColor" stroke-width="1.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <rect x="4" y="4" width="16" height="16" rx="2"/>
-          <rect x="9" y="9" width="6" height="6"/>
-          <line x1="9" y1="1" x2="9" y2="4"/>
-          <line x1="15" y1="1" x2="15" y2="4"/>
-          <line x1="9" y1="20" x2="9" y2="23"/>
-          <line x1="15" y1="20" x2="15" y2="23"/>
-          <line x1="20" y1="9" x2="23" y2="9"/>
-          <line x1="20" y1="14" x2="23" y2="14"/>
-          <line x1="1" y1="9" x2="4" y2="9"/>
-          <line x1="1" y1="14" x2="4" y2="14"/>
-        </svg>
+      <div class="hub-header">
+        <h1>Компоненты</h1>
+        <p class="subtitle">Установите нейронные сети для работы транскрибатора</p>
       </div>
-      <h1>Установка модели GigaAM-v3</h1>
-      <p class="subtitle">
-        Для работы необходимо один раз загрузить веса модели (~900 МБ).
-        После установки модель хранится локально и не требует интернета.
-      </p>
-      <div class="pills">
-        <span class="pill">🧠 220M параметров</span>
-        <span class="pill">⚡ Conformer архитектура</span>
-        <span class="pill">🇷🇺 Русский язык</span>
-      </div>
-      <div style="margin-top:32px">
-        <button id="install-btn" class="btn btn-primary">
-          Скачать и установить модель
-        </button>
-      </div>
-
-      <div id="download-block" style="display:none">
-        <p class="dl-status" id="dl-status">Загрузка весов модели...</p>
-        <div class="progress-wrap">
-          <div class="progress-fill" id="dl-fill"></div>
-        </div>
-        <div class="dl-info">
-          <span class="dl-info-left" id="dl-info-left">gigaam/weights.pt</span>
-          <span class="dl-info-right" id="dl-info-right">0 МБ / 900 МБ</span>
-        </div>
+      <div class="hub-grid" id="hub-grid">
+        <!-- cards rendered by JS -->
       </div>
     </section>
 
@@ -143,7 +110,21 @@
               </div>
             </div>
 
-            <!-- Device (hidden until CUDA check) -->
+            <!-- Punctuation -->
+            <div class="setting-group" id="punct-group" style="display:none">
+              <div class="toggle-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="punct-toggle" />
+                  <span class="toggle-track"></span>
+                </label>
+                <div class="toggle-text">
+                  <div class="toggle-label">Расставить пунктуацию</div>
+                  <div class="toggle-sub">deepmultilingualpunctuation — постобработка</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Device (hidden until CUDA detected) -->
             <div class="setting-group hidden" id="device-group">
               <label class="setting-label">УСТРОЙСТВО</label>
               <div class="device-row">
