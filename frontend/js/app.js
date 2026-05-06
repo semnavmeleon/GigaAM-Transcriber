@@ -107,12 +107,14 @@ function setupStage2() {
   });
 }
 
+const AUDIO_EXTS = new Set(['mp3', 'wav', 'm4a', 'ogg', 'flac', 'opus']);
+const VIDEO_EXTS = new Set(['mp4', 'mkv', 'avi', 'mov', 'webm', 'ts', 'm2ts']);
+
 function addFiles(incoming) {
-  const allowed = ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'opus'];
   const MAX_SIZE = 500 * 1024 * 1024;
   for (const f of incoming) {
     const ext = f.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) { ui.toast(`Формат ${ext} не поддерживается`, 'error'); continue; }
+    if (!AUDIO_EXTS.has(ext) && !VIDEO_EXTS.has(ext)) { ui.toast(`Формат .${ext} не поддерживается`, 'error'); continue; }
     if (f.size > MAX_SIZE) { ui.toast(`${f.name} превышает 500 МБ`, 'error'); continue; }
     if (selectedFiles.length >= 10) { ui.toast('Максимум 10 файлов за раз', 'error'); break; }
     if (!selectedFiles.find(s => s.name === f.name && s.size === f.size)) selectedFiles.push(f);

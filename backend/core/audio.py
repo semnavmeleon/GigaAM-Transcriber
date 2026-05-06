@@ -1,5 +1,7 @@
 import logging
 import os
+import shutil
+import subprocess
 from typing import List, Tuple
 
 import numpy as np
@@ -12,12 +14,64 @@ SAMPLE_RATE = 16000
 # gigaam transcribe() rejects files > 25 s; keep hard cap at 15 s for safety
 HARD_CAP_SEC = 15
 
+VIDEO_EXTS = {'.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.m2ts'}
+
+
+def _is_video(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() in VIDEO_EXTS
+
+
+def _has_audio_stream(input_abs: str, ffmpeg_bin: str) -> bool:
+    """Use ffprobe (or fallback: ffmpeg stderr) to detect if file has an audio stream."""
+    ffprobe_bin = shutil.which('ffprobe') or ffmpeg_bin.replace('ffmpeg', 'ffprobe')
+    probe = subprocess.run(
+        [ffprobe_bin, '-v', 'error',
+         '-select_streams', 'a:0',
+         '-show_entries', 'stream=codec_type',
+         '-of', 'default=noprint_wrappers=1:nokey=1',
+         input_abs],
+        capture_output=True,
+    )
+    if probe.returncode == 0 and b'audio' in probe.stdout:
+        return True
+
+    # ffprobe not available — fall back to reading ffmpeg stderr for stream info
+    info = subprocess.run(
+        [ffmpeg_bin, '-v', 'quiet', '-i', input_abs],
+        capture_output=True,
+    )
+    return b'Audio:' in info.stderr
+
 
 def convert_to_wav(input_path: str, output_path: str) -> str:
-    audio = AudioSegment.from_file(input_path)
-    audio = audio.set_frame_rate(SAMPLE_RATE).set_channels(1).set_sample_width(2)
-    audio.export(output_path, format="wav")
-    return output_path
+    # Use absolute paths — relative paths can break on Windows when the
+    # subprocess working directory differs from the server cwd.
+    input_abs = os.path.abspath(input_path)
+    output_abs = os.path.abspath(output_path)
+
+    ffmpeg_bin = shutil.which('ffmpeg') or 'ffmpeg'
+
+    if not _has_audio_stream(input_abs, ffmpeg_bin):
+        raise RuntimeError(
+            'В файле не найдена аудиодорожка. '
+            'Возможно, файл содержит только видео без звука.'
+        )
+
+    cmd = [
+        ffmpeg_bin, '-y',
+        '-i', input_abs,
+        '-map', '0:a:0',   # explicitly pick first audio stream
+        '-vn',
+        '-acodec', 'pcm_s16le',
+        '-ar', str(SAMPLE_RATE),
+        '-ac', '1',
+        output_abs,
+    ]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        err = result.stderr.decode('utf-8', errors='replace')
+        raise RuntimeError(f'ffmpeg conversion failed: {err[-400:]}')
+    return output_abs
 
 
 def get_duration(wav_path: str) -> float:

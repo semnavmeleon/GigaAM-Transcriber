@@ -16,6 +16,7 @@ const I = {
   chevDown:    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
   chevUp:      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
   eye:         `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  video:       `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
 };
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -70,8 +71,13 @@ export function setModelLoaded(loaded) {
 }
 
 // ── File list ─────────────────────────────────────────────────────────────────
-function fileIconClass(name) {
-  return ['flac'].includes(name.split('.').pop().toLowerCase()) ? 'lossless' : 'audio';
+const VIDEO_EXTS = new Set(['mp4', 'mkv', 'avi', 'mov', 'webm', 'ts', 'm2ts']);
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (VIDEO_EXTS.has(ext)) return { svg: I.video, cls: 'video' };
+  if (ext === 'flac') return { svg: I.file, cls: 'lossless' };
+  return { svg: I.file, cls: 'audio' };
 }
 
 function formatBytes(bytes) {
@@ -84,10 +90,11 @@ export function renderFileList(files, onRemove) {
   const summary = document.getElementById('file-summary');
   list.innerHTML = '';
   files.forEach((f, i) => {
+    const { svg, cls } = fileIcon(f.name);
     const row = document.createElement('div');
     row.className = 'file-row';
     row.innerHTML = `
-      <span class="file-icon ${fileIconClass(f.name)}">${I.file}</span>
+      <span class="file-icon ${cls}">${svg}</span>
       <span class="file-name" title="${f.name}">${f.name}</span>
       <span class="file-size">${formatBytes(f.size)}</span>
       <button class="file-remove" aria-label="Удалить">${I.x}</button>`;

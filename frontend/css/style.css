@@ -197,6 +197,7 @@ footer {
 .file-icon { flex-shrink: 0; }
 .file-icon.audio { color: var(--accent); }
 .file-icon.lossless { color: var(--ok); }
+.file-icon.video { color: var(--warn); }
 .file-name { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
 .file-remove { background: none; border: none; cursor: pointer; color: var(--text-3); padding: 2px; display: flex; }

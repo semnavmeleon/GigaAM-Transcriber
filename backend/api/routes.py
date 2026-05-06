@@ -136,11 +136,14 @@ async def _run_transcription(
         task.total_chunks = 0
 
         try:
-            wav_path = str(task.output_dir / (file_path.stem + "_converted.wav"))
+            # Use file index as name — avoids special chars (brackets, Cyrillic)
+            # in paths that break ffmpeg on Windows
+            file_idx = len(task.results)
+            wav_path = str(task.output_dir / f"audio_{file_idx:04d}.wav")
             await loop.run_in_executor(None, audio_mod.convert_to_wav, str(file_path), wav_path)
 
             file_result.duration = await loop.run_in_executor(None, audio_mod.get_duration, wav_path)
-            chunk_tmp = str(task.output_dir / f"{file_path.stem}_chunks")
+            chunk_tmp = str(task.output_dir / f"chunks_{file_idx:04d}")
             os.makedirs(chunk_tmp, exist_ok=True)
 
             if use_vad:
