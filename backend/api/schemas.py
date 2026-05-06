@@ -13,6 +13,8 @@ class ComponentInfo(BaseModel):
     installing: bool = False
     install_percent: float = 0.0
     install_elapsed: int = 0
+    install_current_mb: int = 0
+    install_total_mb: int = 0
     install_error: Optional[str] = None
 
 

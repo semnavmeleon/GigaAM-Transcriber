@@ -69,22 +69,30 @@ function buildHubCard(comp, { onInstall, onUninstall, onSetActive }) {
 
   if (comp.installing) {
     const pct = comp.install_percent || 0;
-    const indeterminate = pct < 1;
-    const downloaded = Math.round(pct / 100 * comp.size_mb);
+    const currentMb = comp.install_current_mb || 0;
+    const totalMb = comp.install_total_mb || comp.size_mb || 0;
+    const hasMbData = currentMb > 0 || pct >= 1;
+    const indeterminate = !hasMbData;
     const elapsed = comp.install_elapsed || 0;
     const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const ss = String(elapsed % 60).padStart(2, '0');
     const timeStr = elapsed > 0 ? ` · ${mm}:${ss}` : '';
     const progEl = document.createElement('div');
     progEl.className = 'hub-card-prog';
+    let label;
+    if (currentMb > 0) {
+      label = `${currentMb} МБ / ${totalMb} МБ  ·  ${Math.round(pct)}%${timeStr}`;
+    } else if (pct >= 1) {
+      label = `${Math.round(pct / 100 * totalMb)} МБ / ${totalMb} МБ  ·  ${Math.round(pct)}%${timeStr}`;
+    } else {
+      label = `Загрузка ~${totalMb} МБ${timeStr}`;
+    }
     progEl.innerHTML = `
       <div class="hub-prog-bar">
         <div class="hub-prog-fill${indeterminate ? ' indeterminate' : ''}"
-             style="width:${pct}%"></div>
+             style="width:${Math.min(pct, 100)}%"></div>
       </div>
-      <div class="hub-prog-label">${pct >= 1
-        ? `${downloaded} МБ / ${comp.size_mb} МБ  ·  ${Math.round(pct)}%${timeStr}`
-        : `Загрузка ~${comp.size_mb} МБ${timeStr}`}</div>`;
+      <div class="hub-prog-label">${label}</div>`;
     body.appendChild(progEl);
   }
   card.appendChild(body);

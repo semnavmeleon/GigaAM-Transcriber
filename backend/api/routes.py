@@ -69,6 +69,9 @@ async def system_info():
             active=active == variant,
             installing=prog.get("running", False),
             install_percent=prog.get("percent", 0.0),
+            install_elapsed=prog.get("elapsed", 0),
+            install_current_mb=prog.get("current_mb", 0),
+            install_total_mb=prog.get("total_mb", 448),
             install_error=prog.get("error"),
         ))
 
@@ -84,6 +87,8 @@ async def system_info():
         installing=pp.get("running", False),
         install_percent=pp.get("percent", 0.0),
         install_elapsed=pp.get("elapsed", 0),
+        install_current_mb=0,
+        install_total_mb=2240,
         install_error=pp.get("error"),
     ))
 

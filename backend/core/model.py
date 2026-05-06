@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,7 @@ _download_state = {
     "done": False,
     "error": None,
     "variant": None,
+    "started_at": None,
 }
 
 GIGAAM_MODEL_VARIANT = os.getenv("GIGAAM_MODEL", "v2_ctc")
@@ -65,7 +67,10 @@ def _drop_partial(variant: str):
 
 def _variant_cached(variant: str) -> bool:
     p = _variant_cache_path(variant)
-    return p.exists() and p.stat().st_size > 100 * 1024 * 1024
+    if not p.exists():
+        return False
+    expected = _VARIANT_SIZES.get(variant, 448 * 1024 * 1024)
+    return p.stat().st_size >= expected * 0.9
 
 
 def _current_cache_size() -> int:
@@ -143,10 +148,13 @@ def download_progress(variant: Optional[str] = None) -> dict:
     expected = _VARIANT_SIZES.get(v, 448 * 1024 * 1024)
     p = _variant_cache_path(v)
     size = p.stat().st_size if p.exists() else 0
-    percent = min(100.0, size / expected * 100)
+    percent = min(99.0, size / expected * 100)  # cap at 99 until fully verified
     running = _download_state["running"] and _download_state.get("variant") == v
     done = _variant_cached(v)
     error = _download_state["error"] if _download_state.get("variant") == v else None
+    elapsed = 0
+    if _download_state.get("started_at"):
+        elapsed = int(time.time() - _download_state["started_at"])
     return {
         "percent": 100.0 if done else percent,
         "done": done,
@@ -155,6 +163,7 @@ def download_progress(variant: Optional[str] = None) -> dict:
         "current_mb": size // (1024 * 1024),
         "total_mb": expected // (1024 * 1024),
         "variant": v,
+        "elapsed": elapsed,
     }
 
 
@@ -165,7 +174,7 @@ def start_download_and_load(variant: str = GIGAAM_MODEL_VARIANT):
     if _variant_cached(variant):
         # Already downloaded — just load into memory
         pass
-    _download_state = {"running": True, "done": False, "error": None, "variant": variant}
+    _download_state = {"running": True, "done": False, "error": None, "variant": variant, "started_at": time.time()}
 
     def _run():
         global _download_state, _active_variant
@@ -173,10 +182,10 @@ def start_download_and_load(variant: str = GIGAAM_MODEL_VARIANT):
             load_model_sync(variant)
             if _active_variant is None:
                 _active_variant = variant
-            _download_state = {"running": False, "done": True, "error": None, "variant": variant}
+            _download_state = {"running": False, "done": True, "error": None, "variant": variant, "started_at": None}
         except Exception as e:
             logger.exception("Model download/load failed")
-            _download_state = {"running": False, "done": False, "error": str(e), "variant": variant}
+            _download_state = {"running": False, "done": False, "error": str(e), "variant": variant, "started_at": None}
 
     threading.Thread(target=_run, daemon=True).start()
 

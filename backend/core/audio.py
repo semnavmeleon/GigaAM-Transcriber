@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
 HARD_CAP_SEC = 15
+MIN_CHUNK_MS = 200  # GigaAM conv padding=(200,200) needs > 400 samples (~25ms); use 200ms to be safe
 
 VIDEO_EXTS = {'.mp4', '.mkv', '.avi', '.mov', '.webm', '.ts', '.m2ts'}
 
@@ -185,4 +186,6 @@ def load_split(
         chunks = _split_vad_seg(audio, chunk_sec, tmp_dir)
     else:
         chunks = _split_fixed_seg(audio, chunk_sec, tmp_dir)
+    # Drop chunks too short for GigaAM's convolution padding (would cause RuntimeError)
+    chunks = [(p, s, e) for p, s, e in chunks if (e - s) * 1000 >= MIN_CHUNK_MS]
     return duration, chunks
