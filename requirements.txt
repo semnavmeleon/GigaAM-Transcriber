@@ -1,0 +1,12 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+gigaam @ git+https://github.com/salute-developers/GigaAM.git
+torch>=2.2.0
+torchaudio>=2.2.0
+pydub>=0.25.1
+silero-vad>=5.1
+ffmpeg-python>=0.2.0
+python-dotenv>=1.0.0
+aiofiles>=23.2.1
+numpy>=1.24.0

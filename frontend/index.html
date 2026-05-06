@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GigaAM Transcriber</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="1.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+      </svg>
+      GigaAM
+    </div>
+    <div class="header-right">
+      <span class="model-badge" id="model-badge">v2 v2_ctc</span>
+      <span class="status-dot" id="status-dot" title="Статус модели"></span>
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────── -->
+  <main>
+
+    <!-- ══ STAGE 1: Install ══════════════════════════════ -->
+    <section id="stage1" class="screen">
+      <div class="install-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+          <rect x="9" y="9" width="6" height="6"/>
+          <line x1="9" y1="1" x2="9" y2="4"/>
+          <line x1="15" y1="1" x2="15" y2="4"/>
+          <line x1="9" y1="20" x2="9" y2="23"/>
+          <line x1="15" y1="20" x2="15" y2="23"/>
+          <line x1="20" y1="9" x2="23" y2="9"/>
+          <line x1="20" y1="14" x2="23" y2="14"/>
+          <line x1="1" y1="9" x2="4" y2="9"/>
+          <line x1="1" y1="14" x2="4" y2="14"/>
+        </svg>
+      </div>
+      <h1>Установка модели GigaAM-v3</h1>
+      <p class="subtitle">
+        Для работы необходимо один раз загрузить веса модели (~900 МБ).
+        После установки модель хранится локально и не требует интернета.
+      </p>
+      <div class="pills">
+        <span class="pill">🧠 220M параметров</span>
+        <span class="pill">⚡ Conformer архитектура</span>
+        <span class="pill">🇷🇺 Русский язык</span>
+      </div>
+      <div style="margin-top:32px">
+        <button id="install-btn" class="btn btn-primary">
+          Скачать и установить модель
+        </button>
+      </div>
+
+      <div id="download-block" style="display:none">
+        <p class="dl-status" id="dl-status">Загрузка весов модели...</p>
+        <div class="progress-wrap">
+          <div class="progress-fill" id="dl-fill"></div>
+        </div>
+        <div class="dl-info">
+          <span class="dl-info-left" id="dl-info-left">gigaam/weights.pt</span>
+          <span class="dl-info-right" id="dl-info-right">0 МБ / 900 МБ</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ STAGE 2: Upload & Settings ════════════════════ -->
+    <section id="stage2" class="screen">
+      <div class="stage2-grid">
+
+        <!-- Left: Drop zone + file list -->
+        <div>
+          <div id="dropzone" class="dropzone" tabindex="0" role="button"
+               aria-label="Перетащите аудиофайлы сюда или нажмите для выбора">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 16 12 12 8 16"/>
+              <line x1="12" y1="12" x2="12" y2="21"/>
+              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+            </svg>
+            <span class="dz-text">Перетащите файлы сюда</span>
+            <span class="dz-sub">или нажмите для выбора · mp3, wav, m4a, ogg, flac</span>
+            <input type="file" id="file-input" multiple accept=".mp3,.wav,.m4a,.ogg,.flac,.opus"
+                   style="display:none" />
+          </div>
+          <div id="file-list"></div>
+          <div id="file-summary" class="file-summary"></div>
+        </div>
+
+        <!-- Right: Settings -->
+        <div>
+          <div class="settings-panel">
+            <div class="panel-title">ПАРАМЕТРЫ ТРАНСКРИБАЦИИ</div>
+
+            <!-- Format -->
+            <div class="setting-group" style="margin-top:0">
+              <label class="setting-label">ФОРМАТ ВЫВОДА</label>
+              <div class="seg-control">
+                <button class="seg-btn active" data-fmt="txt">.txt</button>
+                <button class="seg-btn" data-fmt="srt">.srt</button>
+                <button class="seg-btn" data-fmt="json">.json</button>
+              </div>
+            </div>
+
+            <!-- Chunk size -->
+            <div class="setting-group">
+              <div class="slider-header">
+                <label class="setting-label" for="chunk-slider">РАЗМЕР ЧАНКА</label>
+                <span class="slider-value" id="chunk-value">15 с</span>
+              </div>
+              <input type="range" id="chunk-slider" min="5" max="20" step="5" value="15" />
+              <p class="slider-hint">Меньше → точнее, медленнее · Больше → быстрее, возможны ошибки на стыках</p>
+            </div>
+
+            <!-- VAD -->
+            <div class="setting-group">
+              <div class="toggle-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="vad-toggle" checked />
+                  <span class="toggle-track"></span>
+                </label>
+                <div class="toggle-text">
+                  <div class="toggle-label">Умная нарезка по паузам</div>
+                  <div class="toggle-sub">Silero VAD — не режет посередине слова</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Device (hidden until CUDA check) -->
+            <div class="setting-group hidden" id="device-group">
+              <label class="setting-label">УСТРОЙСТВО</label>
+              <div class="device-row">
+                <label class="device-opt">
+                  <input type="radio" name="device" value="cpu" checked /> CPU
+                </label>
+                <label class="device-opt">
+                  <input type="radio" name="device" value="cuda" /> CUDA
+                  <span class="cuda-badge" id="cuda-badge">доступно</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Transcribe button -->
+            <div style="margin-top:24px">
+              <button id="transcribe-btn" class="btn btn-primary btn-full" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                Начать транскрибацию
+              </button>
+            </div>
+
+            <!-- Progress block -->
+            <div id="progress-block">
+              <div class="prog-status" id="prog-status-text">
+                <span style="display:inline-flex">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                       viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                       class="spin">
+                    <line x1="12" y1="2" x2="12" y2="6"/>
+                    <line x1="12" y1="18" x2="12" y2="22"/>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+                    <line x1="2" y1="12" x2="6" y2="12"/>
+                    <line x1="18" y1="12" x2="22" y2="12"/>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+                  </svg>
+                </span>
+                Обработка...
+              </div>
+
+              <div style="margin-top:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="prog-label" style="float:none">По чанкам</span>
+                  <span class="prog-label" id="prog-chunk-label"></span>
+                </div>
+                <div class="prog-bar-wrap" style="margin-top:4px">
+                  <div class="prog-bar-fill" id="prog-chunk-fill" style="width:0%"></div>
+                </div>
+              </div>
+
+              <div style="margin-top:14px">
+                <div class="prog-label" id="prog-file-label">Файл 0 из 0</div>
+                <div class="prog-bar-wrap" style="margin-top:4px">
+                  <div class="prog-bar-fill green" id="prog-file-fill" style="width:0%"></div>
+                </div>
+              </div>
+
+              <div style="margin-top:12px">
+                <button id="cancel-btn" class="btn-danger">Отменить</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ STAGE 3: Results ═══════════════════════════════ -->
+    <section id="stage3" class="screen">
+      <div class="results-header">
+        <div>
+          <div class="results-title">Результаты транскрибации</div>
+          <div class="results-sub" id="results-sub"></div>
+        </div>
+        <button id="more-btn" class="btn btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="1.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Обработать ещё
+        </button>
+      </div>
+      <div id="result-cards" class="result-cards"></div>
+    </section>
+
+  </main>
+
+  <footer>GigaAM Transcriber · локальный инференс</footer>
+  <div id="toast-container"></div>
+</div>
+
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
